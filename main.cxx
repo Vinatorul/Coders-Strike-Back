@@ -6,8 +6,12 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+#define ifthen(x, y, z) (x ? y : z)
+
 const float POD_R = 400;
 const int POD_TIMEOUT = 100;
+// Can't turn by more than 18° in one turn
+const float MAX_ANGLE = 18.0;
 
 
 class Point;
@@ -39,12 +43,12 @@ public:
     {
     }
 
-    inline float dist2(const Point &p) {
+    inline float distance2(const Point &p) {
         return (x - p.x)*(x - p.x) + (y - p.y)*(y - p.y);
     }
 
-    inline float dist(const Point &p) {
-        return sqrt(dist2(p));
+    inline float distance(const Point &p) {
+        return sqrt(distance2(p));
     }
 
     Point closest(const Point &a, const Point &b) {
@@ -101,6 +105,93 @@ public:
         shield(0),
         Unit(id, POD_R)
     {
+    }
+
+    float getAngle(const Point &p) {
+        float d = distance(p);
+        float dx = (p.x - x) / d;
+        float dy = (p.y - y) / d;
+
+        // Simple trigonometry. We multiply by 180.0 / PI to convert radiants to degrees.
+        float a = acos(dx) * 180.0 / M_PI;
+
+        // If the point I want is below me, I have to shift the angle for it to be correct
+        if (dy < 0) {
+            a = 360.0 - a;
+        }
+
+        return a;
+    }
+
+    float diffAngle(const Point &p) {
+        float a = getAngle(p);
+
+        // To know whether we should turn clockwise or not we look at the two ways and keep the smallest
+        // The ternary operators replace the use of a modulo operator which would be slower
+        float right = ifthen(angle <= a, a - angle, 360.0 - angle + a);
+        float left = ifthen(angle >= a, angle - a, angle + 360.0 - a);
+
+        if (right < left) {
+            return right;
+        } else {
+            // We return a negative angle if we must rotate to left
+            return -left;
+        }
+    }
+
+    void rotate(const Point &p) {
+        float a = diffAngle(p);
+
+        if (a > MAX_ANGLE) {
+            a = MAX_ANGLE;
+        } else if (a < -MAX_ANGLE) {
+            a = -MAX_ANGLE;
+        }
+
+        angle += a;
+
+        // The % operator is slow. If we can avoid it, it's better.
+        if (angle >= 360.0) {
+            angle = angle - 360.0;
+        } else if (angle < 0.0) {
+            angle += 360.0;
+        }
+    }
+
+    void boost(int thrust) {
+      // Don't forget that a pod which has activated its shield cannot accelerate for 3 turns
+        if (shield) {
+            return;
+        }
+
+        // Conversion of the angle to radiants
+        float ra = angle * M_PI / 180.0;
+
+        // Trigonometry
+        vx += cos(ra) * thrust;
+        vy += sin(ra) * thrust;
+    }
+
+    void move(float t) {
+        x += vx * t;
+        y += vy * t;
+    }
+
+    void end() {
+        x = round(x);
+        y = round(y);
+        vx = trunc(vx * 0.85);
+        vy = trunc(vy * 0.85);
+
+        // Don't forget that the timeout goes down by 1 each turn. It is reset to 100 when you pass a checkpoint
+        timeout -= 1;
+    }
+
+    void play(Point &p, int thrust) {
+        rotate(p);
+        boost(thrust);
+        move(1.0);
+        end();
     }
 };
 
