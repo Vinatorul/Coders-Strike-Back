@@ -14,12 +14,21 @@ const int POD_TIMEOUT = 100;
 const float MAX_ANGLE = 18.0;
 
 
+int cp_count;
+
+enum UniType {
+    CP,
+    POD
+};
+
 class Point;
 class Unit;
 class Pod;
 class Collision;
+class Checkpoint;
 
 class Collision {
+public:
     Unit* a;
     Unit* b;
     float t;
@@ -76,16 +85,96 @@ public:
     int id;
     float r;
     float vx, vy;
+    UniType type;
 
-    Unit(int id, float r):
-        id(id), r(r)
+    Unit(int id, float r, UniType type):
+        id(id), r(r), type(type)
     {
     }
 
-    Collision collision(const Unit &u) {
+    Collision* collision(Unit &u) {
+        // Square of the distance
+        float dist = distance2(u);
 
+        // Sum of the radii squared
+        float sr = (r + u.r)*(r + u.r);
+
+        // We take everything squared to avoid calling sqrt uselessly. It is better for performances
+
+        if (dist < sr) {
+            // Objects are already touching each other. We have an immediate collision.
+            return new Collision(this, &u, 0.0);
+        }
+
+        // Optimisation. Objects with the same speed will never collide
+        if (vx == u.vx && vy == u.vy) {
+            return NULL;
+        }
+
+        // We place ourselves in the reference frame of u. u is therefore stationary and is at (0,0)
+        float x = x - u.x;
+        float y = y - u.y;
+        Point myp = Point(x, y);
+        float vx = vx - u.vx;
+        float vy = vy - u.vy;
+        Point up = Point(0, 0);
+
+        // We look for the closest point to u (which is in (0,0)) on the line described by our speed vector
+        Point p = up.closest(myp, Point(x + vx, y + vy));
+
+        // Square of the distance between u and the closest point to u on the line described by our speed vector
+        float pdist = up.distance2(p);
+
+        // Square of the distance between us and that point
+        float mypdist = myp.distance2(p);
+
+        // If the distance between u and this line is less than the sum of the radii, there might be a collision
+        if (pdist < sr) {
+         // Our speed on the line
+            float length = sqrt(vx*vx + vy*vy);
+
+            // We move along the line to find the point of impact
+            float backdist = sqrt(sr - pdist);
+            p.x = p.x - backdist * (vx / length);
+            p.y = p.y - backdist * (vy / length);
+
+            // If the point is now further away it means we are not going the right way, therefore the collision won't happen
+            if (myp.distance2(p) > mypdist) {
+                return NULL;
+            }
+
+            pdist = p.distance(myp);
+
+            // The point of impact is further than what we can travel in one turn
+            if (pdist > length) {
+                return NULL;
+            }
+
+            // Time needed to reach the impact point
+            float t = pdist / length;
+
+            return new Collision(this, &u, t);
+        }
+
+        return NULL;
     }
 };
+
+class Checkpoint: public Unit {
+public:
+    Checkpoint(int id, float x, float y):
+        Unit(id, 600, CP)
+    {
+        this->x = x;
+        this->y = y;
+
+        vx = 0;
+        vy = 0;
+    }
+
+    void bounce(Unit*) {}
+};
+
 
 class Pod: public Unit {
 public:
@@ -103,7 +192,7 @@ public:
         partner(NULL),
         checked(0),
         shield(0),
-        Unit(id, POD_R)
+        Unit(id, POD_R, POD)
     {
     }
 
@@ -193,14 +282,70 @@ public:
         move(1.0);
         end();
     }
+
+    void bounce(Unit *u) {
+        if (u->type == CP) {
+            bounce_with_cp();
+        } else {
+            bounce_with_pod(static_cast<Pod*>(u));
+        }
+    }
+
+    void bounce_with_cp() {
+        checked += 1;
+        timeout = partner->timeout = 100;
+        nextCPID = (nextCPID + 1) % cp_count;
+    }
+
+    void bounce_with_pod(Pod *pod) {
+        // If a pod has its shield active its mass is 10 otherwise it's 1
+        float m1 = ifthen(shield, 10, 1);
+        float m2 = ifthen(pod->shield, 10, 1);
+        float mcoeff = (m1 + m2) / (m1 * m2);
+
+        float nx = x - pod->x;
+        float ny = y - pod->y;
+
+        // Square of the distance between the 2 pods. This value could be hardcoded because it is always 800²
+        float nxnysquare = nx*nx + ny*ny;
+
+        float dvx = vx - pod->vx;
+        float dvy = vy - pod->vy;
+
+        // fx and fy are the components of the impact vector. product is just there for optimisation purposes
+        float product = nx*dvx + ny*dvy;
+        float fx = (nx * product) / (nxnysquare * mcoeff);
+        float fy = (ny * product) / (nxnysquare * mcoeff);
+
+        // We apply the impact vector once
+        vx -= fx / m1;
+        vy -= fy / m1;
+        pod->vx += fx / m2;
+        pod->vy += fy / m2;
+
+        // If the norm of the impact vector is less than 120, we normalize it to 120
+        float impulse = sqrt(fx*fx + fy*fy);
+        if (impulse < 120.0) {
+            fx = fx * 120.0 / impulse;
+            fy = fy * 120.0 / impulse;
+        }
+
+        // We apply the impact vector a second time
+        vx -= fx / m1;
+        vy -= fy / m1;
+        pod->vx += fx / m2;
+        pod->vy += fy / m2;
+
+        // This is one of the rare places where a Vector class would have made the code more readable.
+        // But this place is called so often that I can't pay a performance price to make it more readable.
+    }
 };
 
 int main() {
     int laps;
     cin >> laps;
-    int checkpoint_count;
-    cin >> checkpoint_count;
-    vector<pair<int, int>> checkpoints(checkpoint_count);
+    cin >> cp_count;
+    vector<pair<int, int>> checkpoints(cp_count);
     for (auto &i : checkpoints)
         cin >> i.first >> i.second; 
     while (1) {
