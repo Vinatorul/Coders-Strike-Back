@@ -6,6 +6,28 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+const float POD_R = 400;
+const int POD_TIMEOUT = 100;
+
+
+class Point;
+class Unit;
+class Pod;
+class Collision;
+
+class Collision {
+    Unit* a;
+    Unit* b;
+    float t;
+
+    Collision() {}
+
+    Collision(Unit* a, Unit* b, float t):
+        a(a), b(b), t(t)
+    {
+    }
+};
+
 class Point {
 public:
     float x, y;
@@ -15,14 +37,17 @@ public:
     Point(float x, float y):
         x(x), y(y)
     {
-
     }
 
-    inline float dist(Point p) {
-        return sqrt((x - p.x)*(x - p.x) + (y - p.y)*(y - p.y));
+    inline float dist2(const Point &p) {
+        return (x - p.x)*(x - p.x) + (y - p.y)*(y - p.y);
     }
 
-    Point closest(Point a, Point b) {
+    inline float dist(const Point &p) {
+        return sqrt(dist2(p));
+    }
+
+    Point closest(const Point &a, const Point &b) {
         float da = b.y - a.y;
         float db = a.x - b.x;
         float c1 = da*a.x + db*a.y;
@@ -39,6 +64,43 @@ public:
         }
 
         return Point(cx, cy);
+    }
+};
+
+class Unit: public Point {
+public:
+    int id;
+    float r;
+    float vx, vy;
+
+    Unit(int id, float r):
+        id(id), r(r)
+    {
+    }
+
+    Collision collision(const Unit &u) {
+
+    }
+};
+
+class Pod: public Unit {
+public:
+    float angle;
+    int nextCPID;
+    int timeout;
+    Pod* partner;
+    int checked;
+    bool shield;
+
+    Pod(int id):
+        angle(-1),
+        nextCPID(-1),
+        timeout(POD_TIMEOUT),
+        partner(NULL),
+        checked(0),
+        shield(0),
+        Unit(id, POD_R)
+    {
     }
 };
 
