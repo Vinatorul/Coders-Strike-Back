@@ -6,4 +6,4 @@ run:
 
 build:
 	mkdir -p bin
-	g++ -O2 -fno-stack-limit -x c++ -std=c++11 src/main.cxx -o $(binary)
+	g++ -O2 -fno-stack-limit -x c++ -std=c++11 main.cxx -o $(binary)

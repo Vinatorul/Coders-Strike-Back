@@ -1,7 +1,46 @@
+#pragma GCC optimize("Ofast")
+#pragma GCC optimize("inline")
+#pragma GCC optimize("omit-frame-pointer")
+#pragma GCC optimize("unroll-loops")
+
 #include <bits/stdc++.h>
 using namespace std;
 
-#include "point.cxx"
+class Point {
+public:
+    float x, y;
+
+    Point() {};
+
+    Point(float x, float y):
+        x(x), y(y)
+    {
+
+    }
+
+    inline float dist(Point p) {
+        return sqrt((x - p.x)*(x - p.x) + (y - p.y)*(y - p.y));
+    }
+
+    Point closest(Point a, Point b) {
+        float da = b.y - a.y;
+        float db = a.x - b.x;
+        float c1 = da*a.x + db*a.y;
+        float c2 = -db*x + da*y;
+        float det = da*da + db*db;
+        float cx, cy;
+
+        if (det != 0) {
+            cx = (da*c1 - db*c2) / det;
+            cy = (da*c2 + db*c1) / det;
+        } else {
+            cx = x;
+            cy = y;
+        }
+
+        return Point(cx, cy);
+    }
+};
 
 int main() {
     int laps;
